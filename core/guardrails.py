@@ -24,6 +24,9 @@ UNSAFE_KEYWORDS = {
     "bypass",
 }
 
+DEFAULT_MAX_EVIDENCE_RANK = 5
+DEFAULT_MIN_EVIDENCE_SOURCES = 1
+
 
 def guard_unsafe(query: str) -> Tuple[bool, str]:
     """Keyword-based check for unsafe or harmful user query content.
@@ -48,9 +51,13 @@ def guard_unsafe(query: str) -> Tuple[bool, str]:
 
 
 def guard_ontopic(
-    top_retrieval_score: float, threshold: float = 0.01
+    top_retrieval_score: float,
+    threshold: float = 0.0,
+    retrieved_chunks: List[Dict[str, Any]] = None,
+    max_evidence_rank: int = DEFAULT_MAX_EVIDENCE_RANK,
+    min_evidence_sources: int = DEFAULT_MIN_EVIDENCE_SOURCES,
 ) -> Tuple[bool, str]:
-    """Refuses answering if top retrieval score falls below relevance threshold.
+    """Require ranked retrieval evidence rather than treating RRF as probability.
 
     Args:
         top_retrieval_score: Maximum score among top retrieved chunks.
@@ -59,14 +66,46 @@ def guard_ontopic(
     Returns:
         Tuple of (passed: bool, reason: str).
     """
+    if retrieved_chunks is not None:
+        top_chunk = retrieved_chunks[0] if retrieved_chunks else {}
+        evidence = {
+            source
+            for source in ("faiss_rank", "bm25_rank")
+            if isinstance(top_chunk.get(source), int)
+            and top_chunk[source] <= max_evidence_rank
+        }
+        if len(evidence) < min_evidence_sources:
+            return (
+                False,
+                "Insufficient retrieval evidence: "
+                f"{len(evidence)} source(s) ranked within top {max_evidence_rank}; "
+                f"need {min_evidence_sources}. RRF score {top_retrieval_score:.4f} "
+                "is a rank-fusion score, not a probability.",
+            )
+        if top_retrieval_score < threshold:
+            return (
+                False,
+                f"Retrieval evidence was present ({', '.join(sorted(evidence))}), "
+                f"but RRF score {top_retrieval_score:.4f} is below configured floor "
+                f"{threshold:.4f}; RRF is not interpreted as a probability.",
+            )
+        return (
+            True,
+            f"Retrieval evidence passed: {', '.join(sorted(evidence))} candidate(s) "
+            f"within top {max_evidence_rank}; RRF score {top_retrieval_score:.4f} "
+            "was used only as a configurable floor, not as a probability.",
+        )
+
     if top_retrieval_score < threshold:
         return (
             False,
-            f"Top retrieval score ({top_retrieval_score:.4f}) is below relevance threshold ({threshold:.4f}).",
+            f"RRF score ({top_retrieval_score:.4f}) is below configured floor "
+            f"({threshold:.4f}); RRF is not a probability.",
         )
     return (
         True,
-        f"Retrieval score ({top_retrieval_score:.4f}) passed relevance threshold.",
+        f"RRF score ({top_retrieval_score:.4f}) passed configured floor "
+        f"({threshold:.4f}); RRF is not a probability.",
     )
 
 

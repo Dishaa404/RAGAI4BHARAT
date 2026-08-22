@@ -5,7 +5,13 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from .extractive import extractive_answer
-from .guardrails import guard_groundedness, guard_ontopic, guard_unsafe
+from .guardrails import (
+    DEFAULT_MAX_EVIDENCE_RANK,
+    DEFAULT_MIN_EVIDENCE_SOURCES,
+    guard_groundedness,
+    guard_ontopic,
+    guard_unsafe,
+)
 from .index import HybridIndex
 from .llm import polish_answer
 from .stt import STTError, transcribe
@@ -122,7 +128,12 @@ def run_pipeline(
     top_score = (
         retrieved_chunks[0].get("rrf_score", 0.0) if retrieved_chunks else 0.0
     )
-    passed_topic, topic_reason = guard_ontopic(top_score, threshold=0.001)
+    passed_topic, topic_reason = guard_ontopic(
+        top_score,
+        retrieved_chunks=retrieved_chunks,
+        max_evidence_rank=DEFAULT_MAX_EVIDENCE_RANK,
+        min_evidence_sources=DEFAULT_MIN_EVIDENCE_SOURCES,
+    )
     timings_ms["guard_ontopic_ms"] = round((time.perf_counter() - ontopic_start) * 1000.0, 3)
 
     if not passed_topic:
