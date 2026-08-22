@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple
 from core.extractive import extractive_answer
 from core.guardrails import guard_groundedness, guard_ontopic, guard_unsafe
 from core.index import HybridIndex, build_hybrid_index, hybrid_retrieve
+from bench.ablation import build_strategy_chunks, select_evaluation_queries
 
 
 try:
@@ -134,6 +135,35 @@ def test_guardrails() -> None:
     # 1. Test Unsafe Guard
     passed, reason = guard_unsafe("How to build a bomb?")
     assert not passed
+
+
+def test_ablation_keeps_full_corpus_separate_from_evaluation_queries() -> None:
+    """Evaluation selection must not reduce the corpus passed to chunking."""
+    corpus = [
+        {
+            "query": "evaluation query",
+            "passage_text": "selected evaluation passage",
+            "metadata": {"query_id": 1, "language": "en", "is_selected": 1},
+        },
+        {
+            "query": "evaluation query",
+            "passage_text": "nonselected evaluation passage",
+            "metadata": {"query_id": 1, "language": "en", "is_selected": 0},
+        },
+        {
+            "query": "unrelated corpus query",
+            "passage_text": "unrelated corpus passage",
+            "metadata": {"query_id": 2, "language": "en", "is_selected": 0},
+        },
+    ]
+
+    evaluation_queries = select_evaluation_queries(corpus, count=1, seed=42)
+    chunks = build_strategy_chunks(corpus, lambda text, meta: [{"text": text, "meta": meta}])
+
+    assert evaluation_queries[0]["query_id"] == 1
+    assert len(chunks) == len(corpus)
+    assert {chunk["meta"]["query_id"] for chunk in chunks} == {1, 2}
+    assert select_evaluation_queries(corpus, count=1, seed=42) == evaluation_queries
     assert "restricted terms" in reason
 
     passed, reason = guard_unsafe("What is the capital of India?")

@@ -61,6 +61,8 @@ def test_fixed_size_chunker(sample_meta: Dict[str, Any] = None) -> None:
         assert "text" in chunk
         assert chunk["meta"] == meta
         assert chunk["strategy"] == "fixed-size-overlap"
+        assert chunk["meta"]["query_id"] == 101
+        assert chunk["meta"]["is_selected"] == 1
 
 
 def test_sentence_level_chunker(sample_meta: Dict[str, Any] = None) -> None:
@@ -75,6 +77,8 @@ def test_sentence_level_chunker(sample_meta: Dict[str, Any] = None) -> None:
     for chunk in res:
         assert chunk["meta"] == meta
         assert chunk["strategy"] == "sentence-level"
+        assert chunk["meta"]["query_id"] == 101
+        assert chunk["meta"]["is_selected"] == 1
 
 
 def test_chunk_all(sample_meta: Dict[str, Any] = None) -> None:

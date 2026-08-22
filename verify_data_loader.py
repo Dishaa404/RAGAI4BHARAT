@@ -12,14 +12,25 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from datasets import load_dataset
 
-print("Loading train[:3] of ai4bharat/MSMARCO-XI ('hi' config)...")
+print("Loading train[:3] of ai4bharat/MSMARCO-XI ('default' config, Hindi rows)...")
 print("(First run downloads dataset — may take a few minutes)\n")
-ds = load_dataset("ai4bharat/MSMARCO-XI", "hi", split="train[:3]")
+ds = load_dataset(
+    "ai4bharat/MSMARCO-XI", "default", split="train", streaming=True
+)
+rows = []
+for candidate in ds:
+    if str(candidate.get("target_lang", "")).lower().startswith("hin_"):
+        rows.append(candidate)
+    if len(rows) == 3:
+        break
 
-print(f"--- Row count: {len(ds)} ---")
-print(f"Column names: {ds.column_names}\n")
+if len(rows) < 3:
+    raise RuntimeError("Could not find three Hindi rows in the streamed dataset.")
 
-row = ds[0]
+print(f"--- Row count sampled: {len(rows)} ---")
+print(f"Column names: {list(rows[0].keys())}\n")
+
+row = rows[0]
 print("=== Full example row (index 0) ===")
 for k, v in row.items():
     if isinstance(v, dict):
