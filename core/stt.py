@@ -99,7 +99,6 @@ def transcribe(audio_path: str) -> str:
         MissingAPIKeyError: If SARVAM_API_KEY environment variable is missing.
         STTError: If transcription fails after 3 retry attempts.
     """
-    load_dotenv()
     api_key = os.getenv("SARVAM_API_KEY")
 
     if not api_key or not api_key.strip():

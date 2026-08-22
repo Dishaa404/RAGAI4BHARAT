@@ -157,6 +157,7 @@ def run_pipeline(
     # Record total latency of grounded fast path
     fast_path_total_ms = round((time.perf_counter() - overall_start) * 1000.0, 3)
     timings_ms["fast_path_total_ms"] = fast_path_total_ms
+    timings_ms["total_fast_ms"] = fast_path_total_ms
 
     # 6. LLM Polish Best-Effort (Outside timed fast path window)
     llm_start = time.perf_counter()

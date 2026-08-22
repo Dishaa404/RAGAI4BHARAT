@@ -27,7 +27,6 @@ def polish_answer(
     Returns:
         Polished answer string if successful, or None if timeout/error occurs.
     """
-    load_dotenv()
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key or not api_key.strip():
         return None
