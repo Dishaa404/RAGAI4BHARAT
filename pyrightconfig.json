@@ -1,0 +1,23 @@
+{
+  "include": [
+    "core",
+    "bench",
+    "tests"
+  ],
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "off",
+  "useLibraryCodeForTypes": true,
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "none",
+  "reportMissingTypeStubs": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "venvPath": ".",
+  "executionEnvironments": [
+    {
+      "root": "."
+    }
+  ]
+}

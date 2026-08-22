@@ -26,46 +26,33 @@ from core.index import build_hybrid_index
 
 def main():
     print("Loading dataset for latency benchmarking...")
-    try:
-        hindi_corpus, english_corpus = load_msmarco_xi_corpora()
-        combined_corpus = hindi_corpus + english_corpus
-    except Exception as exc:
-        print(f"Dataset loading fallback: {exc}")
-        combined_corpus = []
+    # NOTE: No silent fallback — if loading fails, we raise immediately so the
+    # bug is visible rather than masked by synthetic data.
+    hindi_corpus, english_corpus = load_msmarco_xi_corpora()
+    combined_corpus = hindi_corpus + english_corpus
 
     # Extract up to 50 unique queries and build corpus chunks
     sample_queries: List[str] = []
     seen_queries = set()
     chunks: List[Dict[str, Any]] = []
 
-    if combined_corpus:
-        for item in combined_corpus:
-            q = item.get("query", "").strip()
-            if q and q not in seen_queries and len(sample_queries) < 50:
-                seen_queries.add(q)
-                sample_queries.append(q)
-            # Create chunk with metadata
-            chunks.extend(
-                chunk_passage_native(
-                    item.get("passage_text", ""), item.get("metadata", {})
-                )
+    for item in combined_corpus:
+        q = item.get("query", "").strip()
+        if q and q not in seen_queries and len(sample_queries) < 50:
+            seen_queries.add(q)
+            sample_queries.append(q)
+        # Create chunk with metadata
+        chunks.extend(
+            chunk_passage_native(
+                item.get("passage_text", ""), item.get("metadata", {})
             )
+        )
 
-    # Fallback sample queries if dataset is not available or has fewer queries
-    if len(sample_queries) < 50:
-        needed = 50 - len(sample_queries)
-        fallback_queries = [
-            f"What is the capital city of state {i}?" for i in range(needed)
-        ]
-        sample_queries.extend(fallback_queries)
-        if not chunks:
-            chunks = [
-                {
-                    "text": f"The capital city of state {i} is City{i}.",
-                    "meta": {"query_id": str(i), "is_selected": 1},
-                }
-                for i in range(50)
-            ]
+    if not sample_queries:
+        raise RuntimeError(
+            "No queries extracted from the dataset. "
+            "Check that load_msmarco_xi_corpora() is returning passages correctly."
+        )
 
     print(f"Building HybridIndex over {len(chunks)} chunks...")
     index = build_hybrid_index(chunks)

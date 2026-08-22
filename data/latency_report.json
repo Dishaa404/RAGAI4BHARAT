@@ -1,0 +1,17 @@
+{
+  "sample_count": 50,
+  "fast_path_percentiles_ms": {
+    "P50": 56.457,
+    "P70": 65.675,
+    "P90": 132.933,
+    "P100": 343.298
+  },
+  "stt_latency_ms": {
+    "note": "STT (Sarvam API) latency reported separately outside fast path",
+    "measured_ms": null
+  },
+  "llm_polish_latency_ms": {
+    "note": "LLM Polish (Groq API) latency reported separately outside fast path",
+    "mean_ms": 1192.391
+  }
+}

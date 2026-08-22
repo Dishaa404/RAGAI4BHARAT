@@ -19,12 +19,10 @@ from core.index import build_hybrid_index
 
 def main():
     print("Loading dataset for chunking ablation benchmark...")
-    try:
-        hindi_corpus, english_corpus = load_msmarco_xi_corpora()
-        combined_corpus = hindi_corpus + english_corpus
-    except Exception as exc:
-        print(f"Dataset loading fallback: {exc}")
-        combined_corpus = []
+    # NOTE: No silent fallback — if loading fails, we raise immediately so the
+    # bug is visible rather than masked by synthetic data.
+    hindi_corpus, english_corpus = load_msmarco_xi_corpora()
+    combined_corpus = hindi_corpus + english_corpus
 
     # Extract 30 queries that have at least one passage with is_selected == 1
     query_to_passages: Dict[str, List[Dict[str, Any]]] = {}
@@ -44,24 +42,12 @@ def main():
 
     test_queries = [q for q in query_to_passages.keys() if q in query_ids_with_ground_truth][:30]
 
-    # Fallback test queries if dataset is not loaded or has insufficient entries
     if len(test_queries) < 30:
-        test_passages = combined_corpus if combined_corpus else [
-            {
-                "query": f"Sample query {i}?",
-                "passage_text": f"This is detailed passage content for sample query {i} containing target information.",
-                "metadata": {"query_id": f"q_{i}", "is_selected": 1},
-            }
-            for i in range(30)
-        ]
-        query_to_passages = {}
-        test_queries = []
-        for p in test_passages:
-            q = p["query"]
-            if q not in query_to_passages:
-                query_to_passages[q] = []
-                test_queries.append(q)
-            query_to_passages[q].append(p)
+        raise RuntimeError(
+            f"Only {len(test_queries)} queries with ground-truth selected passages found "
+            f"(need 30). Total passages loaded: {len(combined_corpus)}. "
+            "Check that load_msmarco_xi_corpora() is returning real data with is_selected==1 rows."
+        )
 
     # Collect all candidate passages across test queries
     all_passages: List[Dict[str, Any]] = []
