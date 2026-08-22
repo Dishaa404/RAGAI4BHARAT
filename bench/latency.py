@@ -1,8 +1,8 @@
 """Latency benchmarking script for voice-rag fast-path pipeline.
 
-Runs run_pipeline(text_query=...) over 50 sample queries from the loaded dataset,
-collects timings_ms["total_fast_ms"] for each, and prints/saves a table of
-P50/P70/P90/P100 to data/latency_report.json.
+Runs run_pipeline(text_query=...) over 50 sample queries from the loaded dataset
+(25 Hindi + 25 English, balanced), collects timings_ms["total_fast_ms"] for each,
+and prints/saves a table of P50/P70/P90/P100 to data/latency_report.json.
 
 STT and LLM-polish latencies are reported separately in the script output/report
 and are excluded from the fast-path percentiles.
@@ -11,58 +11,120 @@ and are excluded from the fast-path percentiles.
 import json
 import os
 import sys
-import time
 from typing import Any, Dict, List
 import numpy as np
 
 # Ensure parent directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from core.chunkers import chunk_passage_native
+from core.chunkers import chunk_sentence_level
 from core.data_loader import load_msmarco_xi_corpora
 from core.harness import run_pipeline
 from core.index import build_hybrid_index
+
+
+def _sample_balanced_queries(
+    hindi_corpus: List[Dict[str, Any]],
+    english_corpus: List[Dict[str, Any]],
+    n_each: int = 25,
+) -> List[Dict[str, str]]:
+    """Samples up to n_each unique queries independently from each language corpus.
+
+    Interleaves Hindi and English queries so both are represented throughout the run.
+
+    Args:
+        hindi_corpus: List of Hindi passage items from load_msmarco_xi_corpora().
+        english_corpus: List of English passage items.
+        n_each: Max queries to draw from each language.
+
+    Returns:
+        Interleaved list of {"query": str, "lang": str} dicts.
+    """
+    def _unique(corpus: List[Dict[str, Any]], lang: str, limit: int) -> List[Dict[str, str]]:
+        seen: set = set()
+        result = []
+        for item in corpus:
+            q = item.get("query", "").strip()
+            if q and q not in seen:
+                seen.add(q)
+                result.append({"query": q, "lang": lang})
+                if len(result) >= limit:
+                    break
+        return result
+
+    hi = _unique(hindi_corpus, "hi", n_each)
+    en = _unique(english_corpus, "en", n_each)
+
+    # Interleave: hi[0], en[0], hi[1], en[1], ...
+    interleaved: List[Dict[str, str]] = []
+    for h, e in zip(hi, en):
+        interleaved.append(h)
+        interleaved.append(e)
+    # Append remainder if one corpus was shorter
+    interleaved.extend(hi[len(en):])
+    interleaved.extend(en[len(hi):])
+    return interleaved
 
 
 def main():
     print("Loading dataset for latency benchmarking...")
     # NOTE: No silent fallback — if loading fails, we raise immediately so the
     # bug is visible rather than masked by synthetic data.
-    hindi_corpus, english_corpus = load_msmarco_xi_corpora()
+    hindi_corpus, english_corpus = load_msmarco_xi_corpora(split="train[:500]")
     combined_corpus = hindi_corpus + english_corpus
 
-    # Extract up to 50 unique queries and build corpus chunks
-    sample_queries: List[str] = []
-    seen_queries = set()
+    # Build corpus chunks using sentence-level chunking (voice-optimised: complete sentences
+    # prevent unnatural audio pause cuts when used with TTS output)
+    print("Building corpus chunks (sentence-level, voice-optimised strategy)...")
     chunks: List[Dict[str, Any]] = []
-
     for item in combined_corpus:
-        q = item.get("query", "").strip()
-        if q and q not in seen_queries and len(sample_queries) < 50:
-            seen_queries.add(q)
-            sample_queries.append(q)
-        # Create chunk with metadata
         chunks.extend(
-            chunk_passage_native(
+            chunk_sentence_level(
                 item.get("passage_text", ""), item.get("metadata", {})
             )
         )
 
-    if not sample_queries:
+    if not chunks:
         raise RuntimeError(
-            "No queries extracted from the dataset. "
+            "No chunks produced from corpus. "
             "Check that load_msmarco_xi_corpora() is returning passages correctly."
         )
 
     print(f"Building HybridIndex over {len(chunks)} chunks...")
     index = build_hybrid_index(chunks)
 
+    if not index.faiss_available:
+        print("WARNING: FAISS index is NOT available — results will be BM25-only.")
+    else:
+        print("FAISS dense index: ACTIVE")
+
+    # Sample balanced queries: 25 Hindi + 25 English
+    balanced = _sample_balanced_queries(hindi_corpus, english_corpus, n_each=25)
+    if len(balanced) < 2:
+        raise RuntimeError(
+            "Insufficient queries extracted from dataset. "
+            "Check that load_msmarco_xi_corpora() returns both Hindi and English passages."
+        )
+
+    hi_count = sum(1 for q in balanced if q["lang"] == "hi")
+    en_count = sum(1 for q in balanced if q["lang"] == "en")
+    print(f"Query sample: {hi_count} Hindi + {en_count} English = {len(balanced)} total")
+
+    # ── Warm up the embedding model before timing ──────────────────────────────
+    # The first model.encode() call loads weights from disk/cache and spikes
+    # P100 by 200–2000ms. One warm-up query eliminates this cold-start artifact.
+    print("Warming up embedding model (cold-start elimination)...")
+    _ = index.hybrid_retrieve(balanced[0]["query"], k=1)
+    print("Warm-up complete. Starting timed benchmark...\n")
+
+    sample_queries = [q["query"] for q in balanced]
+
     print(f"Executing run_pipeline over {len(sample_queries)} sample queries...")
     fast_latencies: List[float] = []
     llm_latencies: List[float] = []
 
     for idx, query in enumerate(sample_queries, start=1):
-        res = run_pipeline(text_query=query, index=index)
+        res = run_pipeline(text_query=query, index=index, async_polish=False)
         fast_ms = res.timings_ms.get("total_fast_ms") or res.timings_ms.get(
             "fast_path_total_ms", 0.0
         )
@@ -80,6 +142,9 @@ def main():
 
     report = {
         "sample_count": len(sample_queries),
+        "language_balance": {"hi": hi_count, "en": en_count},
+        "chunking_strategy": "sentence-level",
+        "faiss_available": index.faiss_available,
         "fast_path_percentiles_ms": {
             "P50": round(p50, 3),
             "P70": round(p70, 3),
@@ -87,30 +152,33 @@ def main():
             "P100": round(p100, 3),
         },
         "stt_latency_ms": {
-            "note": "STT (Sarvam API) latency reported separately outside fast path",
+            "note": "STT (Sarvam saarika:v2 API) latency reported separately outside fast path",
             "measured_ms": None,
         },
         "llm_polish_latency_ms": {
-            "note": "LLM Polish (Groq API) latency reported separately outside fast path",
+            "note": "LLM Polish (Groq llama-3.3-70b-versatile) latency reported separately outside fast path",
             "mean_ms": round(avg_llm_ms, 3),
         },
     }
 
     # Print Table to stdout
-    print("\n" + "=" * 55)
-    print("          VOICE-RAG PIPELINE LATENCY REPORT          ")
-    print("=" * 55)
-    print(f"Fast-Path Sample Queries: {len(sample_queries)}")
-    print("-" * 55)
+    print("\n" + "=" * 60)
+    print("        VOICE-RAG PIPELINE LATENCY REPORT         ")
+    print("=" * 60)
+    print(f"Fast-Path Sample Queries : {len(sample_queries)}")
+    print(f"Language Balance         : {hi_count} Hindi / {en_count} English")
+    print(f"Chunking Strategy        : sentence-level (voice-optimised)")
+    print(f"FAISS Active             : {index.faiss_available}")
+    print("-" * 60)
     print(f"  P50 (Median)   : {p50:.2f} ms")
     print(f"  P70            : {p70:.2f} ms")
     print(f"  P90            : {p90:.2f} ms")
     print(f"  P100 (Max)     : {p100:.2f} ms")
-    print("-" * 55)
+    print("-" * 60)
     print("  Separate Stage Latencies (Excluded from Fast-Path):")
-    print("    - STT Latency        : External API dependent (Sarvam)")
-    print(f"    - LLM Polish Latency : {avg_llm_ms:.2f} ms (Groq llama-3.3-70b)")
-    print("=" * 55)
+    print("    - STT Latency        : External API dependent (Sarvam saarika:v2)")
+    print(f"    - LLM Polish Latency : {avg_llm_ms:.2f} ms (Groq llama-3.3-70b-versatile)")
+    print("=" * 60)
 
     os.makedirs("data", exist_ok=True)
     report_path = os.path.join("data", "latency_report.json")

@@ -44,11 +44,14 @@ def extractive_answer(
     best_chunk: Dict[str, Any] = {}
     highest_score = 0.0
 
-    for chunk in chunks:
+    for chunk_idx, chunk in enumerate(chunks):
         chunk_text = chunk.get("text", "")
         sentences = _split_into_sentences(chunk_text)
         if not sentences:
             sentences = [chunk_text.strip()] if chunk_text.strip() else []
+
+        # Top-ranked hybrid retrieval chunks receive priority boost
+        rank_priority = 1.0 / (1.0 + 0.4 * chunk_idx)
 
         for sentence in sentences:
             sentence_tokens = _tokenize(sentence)
@@ -62,13 +65,8 @@ def extractive_answer(
             jaccard = len(intersection) / len(query_tokens.union(sentence_tokens))
             coverage = len(intersection) / len(query_tokens)
 
-            # Combined lexical similarity score
-            score = 0.5 * jaccard + 0.5 * coverage
-
-            if score > highest_score:
-                highest_score = score
-                best_sentence = sentence
-                best_chunk = chunk
+            # Combined score incorporating lexical overlap and hybrid retrieval rank priority
+            score = (0.5 * jaccard + 0.5 * coverage) * rank_priority
 
     confidence_score = round(min(max(highest_score, 0.0), 1.0), 4)
     return (best_sentence, best_chunk, confidence_score)

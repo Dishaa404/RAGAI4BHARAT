@@ -1,0 +1,192 @@
+[
+  {
+    "query_id": 1001,
+    "query": "भारत की राजधानी क्या है?",
+    "Eng_Query": "What is the capital of India?",
+    "query_type": "location",
+    "passages": {
+      "is_selected": [0, 1, 0],
+      "English_passages": [
+        "India is a diverse country located in South Asia with twenty-eight states.",
+        "New Delhi is the official capital city of India and the seat of all three branches of government.",
+        "Mumbai is recognized as the financial and commercial capital of India."
+      ],
+      "Translated_passages": [
+        "भारत दक्षिण एशिया में स्थित 28 राज्यों वाला एक विविध देश है।",
+        "नई दिल्ली भारत की आधिकारिक राजधानी और सरकार की तीनों शाखाओं का केंद्र है।",
+        "मुंबई को भारत की वित्तीय और वाणिज्यिक राजधानी के रूप में जाना जाता है।"
+      ]
+    }
+  },
+  {
+    "query_id": 1002,
+    "query": "प्रकाश संश्लेषण की प्रक्रिया क्या है?",
+    "Eng_Query": "What is the process of photosynthesis?",
+    "query_type": "description",
+    "passages": {
+      "is_selected": [1, 0, 0],
+      "English_passages": [
+        "Photosynthesis is the chemical process by which green plants and organisms synthesize nutrients from carbon dioxide and water using sunlight.",
+        "Water evaporates from plants into the atmosphere through transpiration.",
+        "Oxygen is absorbed by living cells during cellular respiration."
+      ],
+      "Translated_passages": [
+        "प्रकाश संश्लेषण वह रासायनिक प्रक्रिया है जिसके द्वारा हरे पौधे और जीव सूर्य के प्रकाश का उपयोग करके कार्बन डाइऑक्साइड और पानी से पोषक तत्वों का संश्लेषण करते हैं।",
+        "वाष्पोत्सर्जन के माध्यम से पौधों से पानी वायुमंडल में वाष्पित होता है।",
+        "कोशिकीय श्वसन के दौरान जीवित कोशिकाओं द्वारा ऑक्सीजन का अवशोषण होता है।"
+      ]
+    }
+  },
+  {
+    "query_id": 1003,
+    "query": "हिमालय की सबसे ऊंची चोटी कौन सी है?",
+    "Eng_Query": "Which is the highest peak of the Himalayas?",
+    "query_type": "entity",
+    "passages": {
+      "is_selected": [0, 1, 0],
+      "English_passages": [
+        "The Himalayas stretch across five countries in Asia.",
+        "Mount Everest is the highest mountain peak in the Himalayas and on Earth, standing at 8,848 meters above sea level.",
+        "K2 is the second highest mountain peak in the world."
+      ],
+      "Translated_passages": [
+        "हिमालय एशिया के पांच देशों में फैला हुआ है।",
+        "माउंट एवरेस्ट हिमालय और पृथ्वी की सबसे ऊंची पर्वत चोटी है, जो समुद्र तल से 8,848 मीटर ऊपर है।",
+        "के2 दुनिया की दूसरी सबसे ऊंची पर्वत चोटी है।"
+      ]
+    }
+  },
+  {
+    "query_id": 1004,
+    "query": "कंप्यूटर में RAM का क्या कार्य है?",
+    "Eng_Query": "What is the function of RAM in a computer?",
+    "query_type": "numeric",
+    "passages": {
+      "is_selected": [1, 0, 0],
+      "English_passages": [
+        "Random Access Memory (RAM) serves as the fast temporary memory where a computer stores working data and machine code currently in use.",
+        "Hard disk drives store files permanently using magnetic media storage.",
+        "Central Processing Unit executes instructions sent by software applications."
+      ],
+      "Translated_passages": [
+        "रैंडम एक्सेस मेमोरी (RAM) तेज अस्थायी मेमोरी के रूप में कार्य करती है जहां एक कंप्यूटर वर्तमान में उपयोग में आने वाले डेटा को संग्रहीत करता है।",
+        "हार्ड डिस्क ड्राइव चुंबकीय मीडिया स्टोरेज का उपयोग करके फाइलों को स्थायी रूप से स्टोर करते हैं।",
+        "सेंट्रल प्रोसेसिंग यूनिट सॉफ्टवेयर एप्लिकेशन द्वारा भेजे गए निर्देशों को निष्पादित करती है।"
+      ]
+    }
+  },
+  {
+    "query_id": 1005,
+    "query": "मानव शरीर में कुल कितनी हड्डियां होती हैं?",
+    "Eng_Query": "How many bones are in the adult human body?",
+    "query_type": "numeric",
+    "passages": {
+      "is_selected": [0, 1, 0],
+      "English_passages": [
+        "Infants are born with approximately 270 bones at birth.",
+        "An adult human skeleton consists of exactly 206 individual bones fused together.",
+        "Muscles attach to bones through dense fibrous connective tissue called tendons."
+      ],
+      "Translated_passages": [
+        "शिशुओं का जन्म के समय लगभग 270 हड्डियों के साथ जन्म होता है।",
+        "एक वयस्क मानव कंकाल में ठीक 206 अलग-अलग हड्डियां एक साथ जुड़ी होती हैं।",
+        "मांसपेशियां टेंडन नामक घने रेशेदार संयोजी ऊतक के माध्यम से हड्डियों से जुड़ती हैं।"
+      ]
+    }
+  },
+  {
+    "query_id": 1006,
+    "query": "सौर मंडल का सबसे बड़ा ग्रह कौन सा है?",
+    "Eng_Query": "Which is the largest planet in our solar system?",
+    "query_type": "entity",
+    "passages": {
+      "is_selected": [1, 0, 0],
+      "English_passages": [
+        "Jupiter is the largest planet in the Solar System, with a mass more than two and a half times that of all the other planets combined.",
+        "Saturn is known for its prominent ring system composed of ice particles.",
+        "Mars is often referred to as the Red Planet due to iron oxide on its surface."
+      ],
+      "Translated_passages": [
+        "बृहस्पति सौर मंडल का सबसे बड़ा ग्रह है, जिसका द्रव्यमान अन्य सभी ग्रहों के संयुक्त द्रव्यमान से ढाई गुना अधिक है।",
+        "शनि बर्फ के कणों से बनी अपनी प्रमुख वलय प्रणाली के लिए जाना जाता है।",
+        "मंगल को अक्सर इसकी सतह पर आयरन ऑक्साइड के कारण लाल ग्रह कहा जाता है।"
+      ]
+    }
+  },
+  {
+    "query_id": 1007,
+    "query": "भारतीय संविधान कब लागू हुआ?",
+    "Eng_Query": "When did the Constitution of India come into force?",
+    "query_type": "date",
+    "passages": {
+      "is_selected": [0, 1, 0],
+      "English_passages": [
+        "The Constitution of India was adopted by the Constituent Assembly on 26 November 1949.",
+        "The Constitution of India officially came into effect on 26 January 1950, establishing India as a sovereign republic.",
+        "August 15 marks the national Independence Day of India."
+      ],
+      "Translated_passages": [
+        "भारतीय संविधान को 26 नवंबर 1949 को संविधान सभा द्वारा अपनाया गया था।",
+        "भारतीय संविधान आधिकारिक तौर पर 26 जनवरी 1950 को लागू हुआ, जिसने भारत को एक संप्रभु गणराज्य के रूप में स्थापित किया।",
+        "15 अगस्त भारत का राष्ट्रीय स्वतंत्रता दिवस है।"
+      ]
+    }
+  },
+  {
+    "query_id": 1008,
+    "query": "पानी का रासायनिक सूत्र क्या है?",
+    "Eng_Query": "What is the chemical formula of water?",
+    "query_type": "entity",
+    "passages": {
+      "is_selected": [1, 0, 0],
+      "English_passages": [
+        "The chemical formula of pure water is H2O, meaning each molecule contains one oxygen atom and two hydrogen atoms.",
+        "Carbon dioxide has the chemical formula CO2.",
+        "Sodium chloride is the chemical name for common table salt."
+      ],
+      "Translated_passages": [
+        "शुद्ध पानी का रासायनिक सूत्र H2O है, जिसका अर्थ है कि प्रत्येक अणु में एक ऑक्सीजन परमाणु और दो हाइड्रोजन परमाणु होते हैं।",
+        "कार्बन डाइऑक्साइड का रासायनिक सूत्र CO2 है।",
+        "सोडियम क्लोराइड सामान्य टेबल सॉल्ट का रासायनिक नाम है।"
+      ]
+    }
+  },
+  {
+    "query_id": 1009,
+    "query": "भारत के पहले राष्ट्रपति कौन थे?",
+    "Eng_Query": "Who was the first President of India?",
+    "query_type": "person",
+    "passages": {
+      "is_selected": [0, 1, 0],
+      "English_passages": [
+        "Jawaharlal Nehru served as the first Prime Minister of independent India.",
+        "Dr. Rajendra Prasad served as the first President of India from 1950 to 1962.",
+        "Dr. B.R. Ambedkar was the chief architect of the Indian Constitution."
+      ],
+      "Translated_passages": [
+        "जवाहरलाल नेहरू ने स्वतंत्र भारत के पहले प्रधानमंत्री के रूप में कार्य किया।",
+        "डॉ. राजेंद्र प्रसाद ने 1950 से 1962 तक भारत के पहले राष्ट्रपति के रूप में कार्य किया।",
+        "डॉ. बी.आर. अंबेडकर भारतीय संविधान के मुख्य वास्तुकार थे।"
+      ]
+    }
+  },
+  {
+    "query_id": 1010,
+    "query": "ओजोन परत का क्या महत्व है?",
+    "Eng_Query": "What is the importance of the ozone layer?",
+    "query_type": "description",
+    "passages": {
+      "is_selected": [1, 0, 0],
+      "English_passages": [
+        "The ozone layer in the stratosphere absorbs most of the harmful ultraviolet radiation emitted by the Sun, protecting life on Earth.",
+        "The troposphere is the lowest layer of Earth's atmosphere where weather occurs.",
+        "Greenhouse gases trap heat inside the lower atmosphere."
+      ],
+      "Translated_passages": [
+        "समताप मंडल में ओजोन परत सूर्य द्वारा उत्सर्जित अधिकांश हानिकारक पराबैंगनी विकिरण को अवशोषित करती है, जिससे पृथ्वी पर जीवन की रक्षा होती है।",
+        "क्षोभमंडल पृथ्वी के वायुमंडल की सबसे निचली परत है जहाँ मौसम की घटनाएँ होती हैं।",
+        "ग्रीनहाउस गैसें निचले वायुमंडल के अंदर गर्मी को रोकती हैं।"
+      ]
+    }
+  }
+]

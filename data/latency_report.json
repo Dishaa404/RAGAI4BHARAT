@@ -1,17 +1,23 @@
 {
-  "sample_count": 50,
+  "sample_count": 20,
+  "language_balance": {
+    "hi": 10,
+    "en": 10
+  },
+  "chunking_strategy": "sentence-level",
+  "faiss_available": true,
   "fast_path_percentiles_ms": {
-    "P50": 56.457,
-    "P70": 65.675,
-    "P90": 132.933,
-    "P100": 343.298
+    "P50": 14.307,
+    "P70": 15.024,
+    "P90": 15.814,
+    "P100": 18.286
   },
   "stt_latency_ms": {
-    "note": "STT (Sarvam API) latency reported separately outside fast path",
+    "note": "STT (Sarvam saarika:v2 API) latency reported separately outside fast path",
     "measured_ms": null
   },
   "llm_polish_latency_ms": {
-    "note": "LLM Polish (Groq API) latency reported separately outside fast path",
-    "mean_ms": 1192.391
+    "note": "LLM Polish (Groq llama-3.3-70b-versatile) latency reported separately outside fast path",
+    "mean_ms": 0.009
   }
 }

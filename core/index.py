@@ -4,7 +4,10 @@ Uses sentence-transformers 'intfloat/multilingual-e5-small' model with IndexFlat
 and rank_bm25.BM25Okapi, fused via Reciprocal Rank Fusion (RRF).
 """
 
+import json
+import os
 import re
+import warnings
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -52,6 +55,14 @@ class HybridIndex:
             )
         return self._model
 
+    @property
+    def faiss_available(self) -> bool:
+        """Returns True if a FAISS dense index is built and active.
+
+        When False the system is running BM25-only — check build() warnings for cause.
+        """
+        return self.faiss_index is not None
+
     def build(self, chunks: List[Dict[str, Any]]) -> None:
         """Builds both FAISS IndexFlatIP and BM25Okapi indices from input chunks.
 
@@ -76,7 +87,7 @@ class HybridIndex:
 
         self.chunks = chunks
 
-        # 1. Build Dense FAISS Index (best-effort, falls back to BM25 if model loading fails)
+        # 1. Build Dense FAISS Index (best-effort; warns and falls back to BM25 on failure)
         try:
             passage_texts = [
                 f"passage: {c.get('text', '')}" if not c.get('text', '').startswith("passage: ") else c.get('text', '')
@@ -92,7 +103,13 @@ class HybridIndex:
             dimension = embeddings.shape[1]
             self.faiss_index = faiss.IndexFlatIP(dimension)
             self.faiss_index.add(embeddings)
-        except Exception:
+        except Exception as exc:
+            warnings.warn(
+                f"FAISS index build failed: {exc!r}. "
+                "Falling back to BM25-only retrieval. "
+                "Dense retrieval is DISABLED — verify sentence-transformers install and device.",
+                stacklevel=2,
+            )
             self.faiss_index = None
 
         # 2. Build Sparse BM25 Index
@@ -136,8 +153,12 @@ class HybridIndex:
                 for rank_idx, doc_idx in enumerate(indices[0]):
                     if doc_idx != -1:
                         faiss_ranks[doc_idx] = rank_idx + 1  # 1-based rank
-            except Exception:
-                pass
+            except Exception as exc:
+                warnings.warn(
+                    f"FAISS query encode/search failed: {exc!r}. "
+                    "This query will fall back to BM25-only results.",
+                    stacklevel=2,
+                )
 
         # --- BM25 Sparse Retrieval ---
         query_tokens = tokenize_text(query)
@@ -171,6 +192,93 @@ class HybridIndex:
             results.append(chunk_copy)
 
         return results
+
+    def save(self, directory: str) -> None:
+        """Persists the FAISS index, BM25 index, chunks, and model metadata to disk.
+
+        Enables fast startup without re-encoding all passages — load with HybridIndex.load().
+
+        Args:
+            directory: Path to directory where index files will be written (created if absent).
+        """
+        import pickle
+        import faiss as faiss_lib
+
+        os.makedirs(directory, exist_ok=True)
+
+        # FAISS index (skipped if build failed)
+        if self.faiss_index is not None:
+            faiss_lib.write_index(
+                self.faiss_index, os.path.join(directory, "faiss.index")
+            )
+
+        # BM25 + chunks via pickle
+        with open(os.path.join(directory, "bm25.pkl"), "wb") as f:
+            pickle.dump(self.bm25_index, f, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(os.path.join(directory, "chunks.pkl"), "wb") as f:
+            pickle.dump(self.chunks, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # Metadata for reconstruction
+        with open(os.path.join(directory, "meta.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "model_name": self.model_name,
+                    "device": self.device,
+                    "chunk_count": len(self.chunks),
+                    "faiss_saved": self.faiss_index is not None,
+                },
+                f,
+                indent=2,
+            )
+
+    @classmethod
+    def load(cls, directory: str) -> "HybridIndex":
+        """Reconstructs a HybridIndex from a previously saved directory.
+
+        Restores FAISS and BM25 without re-encoding passages, enabling fast server startup.
+
+        Args:
+            directory: Path to directory containing saved index files.
+
+        Returns:
+            Reconstructed HybridIndex instance ready for hybrid_retrieve().
+
+        Raises:
+            FileNotFoundError: If meta.json or required pickle files are missing.
+        """
+        import pickle
+        import faiss as faiss_lib
+
+        meta_path = os.path.join(directory, "meta.json")
+        if not os.path.exists(meta_path):
+            raise FileNotFoundError(
+                f"Index metadata not found at: {meta_path}. "
+                "Was save() called on this directory?"
+            )
+
+        with open(meta_path, encoding="utf-8") as f:
+            meta = json.load(f)
+
+        instance = cls(model_name=meta["model_name"], device=meta.get("device"))
+
+        # Restore FAISS index if it was saved
+        faiss_path = os.path.join(directory, "faiss.index")
+        if os.path.exists(faiss_path):
+            instance.faiss_index = faiss_lib.read_index(faiss_path)
+        else:
+            warnings.warn(
+                f"No faiss.index found in {directory!r}. "
+                "Loaded index will be BM25-only.",
+                stacklevel=2,
+            )
+
+        # Restore BM25 and chunks
+        with open(os.path.join(directory, "bm25.pkl"), "rb") as f:
+            instance.bm25_index = pickle.load(f)
+        with open(os.path.join(directory, "chunks.pkl"), "rb") as f:
+            instance.chunks = pickle.load(f)
+
+        return instance
 
 
 def build_hybrid_index(

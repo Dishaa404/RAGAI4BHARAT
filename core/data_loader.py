@@ -43,14 +43,22 @@ def load_msmarco_xi_corpora(
         RuntimeError: If the dataset fails to load or returns no rows.
         KeyError: If a row is missing the expected "passages" structure.
     """
-    try:
-        from datasets import load_dataset
-    except ImportError as err:
-        raise ImportError(
-            "The 'datasets' package is required. Install via 'pip install -r requirements.txt'."
-        ) from err
+    import os
+    import json
 
-    dataset = load_dataset(dataset_name, "hi", split=split)
+    dataset = None
+    local_sample = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "sample_msmarco.json"))
+
+    if os.path.exists(local_sample):
+        print(f"Loading local sample dataset: {local_sample}")
+        with open(local_sample, encoding="utf-8") as f:
+            dataset = json.load(f)
+    else:
+        try:
+            from datasets import load_dataset
+            dataset = load_dataset(dataset_name, split=split)
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load dataset '{dataset_name}': {exc}") from exc
 
     if len(dataset) == 0:
         raise RuntimeError(

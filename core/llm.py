@@ -31,9 +31,6 @@ def polish_answer(
     if not api_key or not api_key.strip():
         return None
 
-    if not extractive_answer or not extractive_answer.strip():
-        return None
-
     try:
         from groq import Groq
 
@@ -42,24 +39,31 @@ def polish_answer(
         context_text = "\n".join(
             [f"- {c.get('text', '')}" for c in (chunks or []) if c.get("text")]
         )
-        system_prompt = (
-            "You are a helpful AI assistant. Refine the given extractive answer into a clear, "
-            "fluent, and natural response for the user's query using only the provided context. "
-            "Do not add ungrounded or false information."
-        )
-        user_prompt = (
-            f"Query: {query}\n"
-            f"Extractive Answer: {extractive_answer}\n"
-            f"Context Chunks:\n{context_text}\n\n"
-            "Provide the polished answer:"
-        )
 
+        if extractive_answer and extractive_answer.strip():
+            system_prompt = (
+                "You are a helpful AI assistant. Refine the given extractive answer into a clear, "
+                "fluent, and natural response for the user's query using the provided context. "
+                "Keep your response concise and grounded."
+            )
+            user_prompt = (
+                f"Query: {query}\n"
+                f"Extractive Answer: {extractive_answer}\n"
+                f"Context Chunks:\n{context_text}\n\n"
+                "Provide the polished answer:"
+            )
+        else:
+            system_prompt = "You are a helpful, friendly AI assistant. Answer the user's query clearly and concisely."
+            user_prompt = f"User Query: {query}\n\nProvide a helpful response:"
+
+        model_to_use = os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b")
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=model_to_use,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
+            max_tokens=150,
             timeout=timeout,
         )
 
