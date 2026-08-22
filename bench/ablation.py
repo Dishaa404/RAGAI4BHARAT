@@ -1,15 +1,10 @@
-"""Chunking strategy ablation benchmarking script.
-
-Runs all 3 chunking strategies independently through retrieval on 30 queries
-(15 Hindi + 15 English, balanced), computes Recall@5 against is_selected ground
-truth for each strategy, and prints a per-language comparison table.
-"""
+"""Leakage-free chunking strategy ablation benchmark."""
 
 import os
+import random
 import sys
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Sequence, Tuple
 
-# Ensure parent directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core.chunkers import chunk_fixed_size, chunk_passage_native, chunk_sentence_level
@@ -17,133 +12,118 @@ from core.data_loader import load_msmarco_xi_corpora
 from core.index import build_hybrid_index
 
 
-def _sample_with_ground_truth(
-    corpus: List[Dict[str, Any]],
-    limit: int,
-) -> Dict[str, List[Dict[str, Any]]]:
-    """Extracts up to `limit` queries that have at least one is_selected==1 passage.
+CorpusItem = Dict[str, Any]
+EvaluationQuery = Dict[str, Any]
+Chunker = Callable[[str, Dict[str, Any]], List[Dict[str, Any]]]
 
-    Args:
-        corpus: Passage item list from load_msmarco_xi_corpora().
-        limit: Max number of qualifying queries to collect.
 
-    Returns:
-        Dict mapping query_text -> list of all passage items for that query.
-    """
-    query_to_passages: Dict[str, List[Dict[str, Any]]] = {}
-    queries_with_gt: set = set()
-
+def select_evaluation_queries(
+    corpus: Sequence[CorpusItem], count: int = 30, seed: int = 42
+) -> List[EvaluationQuery]:
+    """Select deterministic, language-specific queries with selected passages."""
+    candidates: Dict[Tuple[Any, str], EvaluationQuery] = {}
     for item in corpus:
-        q = item.get("query", "").strip()
-        if not q:
-            continue
-        if q not in query_to_passages:
-            query_to_passages[q] = []
-        query_to_passages[q].append(item)
-        if item.get("metadata", {}).get("is_selected", 0) == 1:
-            queries_with_gt.add(q)
+        metadata = item.get("metadata", {})
+        query_id = metadata.get("query_id")
+        language = metadata.get("language", "unknown")
+        query = str(item.get("query", "")).strip()
+        if query and query_id is not None and metadata.get("is_selected") == 1:
+            candidates.setdefault(
+                (query_id, language), {"query_id": query_id, "language": language, "query": query}
+            )
 
-    eligible = [q for q in query_to_passages if q in queries_with_gt]
-    selected = eligible[:limit]
-    return {q: query_to_passages[q] for q in selected}
+    ordered = sorted(
+        candidates.values(),
+        key=lambda item: (str(item["language"]), str(item["query_id"]), item["query"]),
+    )
+    if len(ordered) < count:
+        raise RuntimeError(
+            f"Only {len(ordered)} evaluation queries with selected passages found; need {count}."
+        )
+    rng = random.Random(seed)
+    rng.shuffle(ordered)
+    return ordered[:count]
 
 
-def main():
-    print("Loading dataset for chunking ablation benchmark...")
-    # NOTE: No silent fallback — if loading fails, we raise immediately so the
-    # bug is visible rather than masked by synthetic data.
+def build_strategy_chunks(
+    corpus: Sequence[CorpusItem], chunk_fn: Chunker
+) -> List[Dict[str, Any]]:
+    """Chunk every corpus passage; evaluation queries never filter this input."""
+    chunks: List[Dict[str, Any]] = []
+    for item in corpus:
+        chunks.extend(chunk_fn(item["passage_text"], item["metadata"]))
+    return chunks
+
+
+def evaluate_strategy(
+    corpus: Sequence[CorpusItem],
+    evaluation_queries: Sequence[EvaluationQuery],
+    chunk_fn: Chunker,
+) -> Dict[str, Any]:
+    """Build a full-corpus index and calculate Recall@5 and MRR@5."""
+    strategy_chunks = build_strategy_chunks(corpus, chunk_fn)
+    index = build_hybrid_index(strategy_chunks)
+    hits = 0
+    reciprocal_ranks: List[float] = []
+
+    for evaluation_query in evaluation_queries:
+        retrieved = index.hybrid_retrieve(evaluation_query["query"], k=5)
+        hit_rank = None
+        for rank, chunk in enumerate(retrieved, start=1):
+            metadata = chunk.get("meta", {})
+            if (
+                metadata.get("query_id") == evaluation_query["query_id"]
+                and metadata.get("language") == evaluation_query["language"]
+                and metadata.get("is_selected") == 1
+            ):
+                hit_rank = rank
+                break
+        reciprocal_ranks.append(1.0 / hit_rank if hit_rank is not None else 0.0)
+        if hit_rank is not None:
+            hits += 1
+
+    query_count = len(evaluation_queries)
+    return {
+        "corpus_passage_count": len(corpus),
+        "chunk_count": len(strategy_chunks),
+        "evaluation_query_count": query_count,
+        "hits_at_5": hits,
+        "recall_at_5": hits / query_count if query_count else 0.0,
+        "mrr_at_5": sum(reciprocal_ranks) / query_count if query_count else 0.0,
+    }
+
+
+def main() -> None:
+    print("Loading full MSMARCO-XI corpus for chunking ablation benchmark...")
     hindi_corpus, english_corpus = load_msmarco_xi_corpora()
-
-    # Sample 10 queries with ground truth from each language independently
-    hi_map = _sample_with_ground_truth(hindi_corpus, limit=10)
-    en_map = _sample_with_ground_truth(english_corpus, limit=10)
-
-    if len(hi_map) < 1:
-        raise RuntimeError(
-            f"No Hindi queries with ground-truth selected passages found. "
-            f"Check that load_msmarco_xi_corpora() returns real data with is_selected==1 rows."
-        )
-    if len(en_map) < 1:
-        raise RuntimeError(
-            f"No English queries with ground-truth selected passages found. "
-            f"Check that load_msmarco_xi_corpora() returns real data with is_selected==1 rows."
-        )
-
-    # Merge query maps: 30 total (15 Hindi + 15 English)
-    combined_map = {**hi_map, **en_map}
-    test_queries = list(combined_map.keys())
-    hi_count = len(hi_map)
-    en_count = len(en_map)
-
-    print(f"Balanced query sample: {hi_count} Hindi + {en_count} English = {len(test_queries)} total")
-
-    # Collect all candidate passages for the selected queries only
-    all_passages: List[Dict[str, Any]] = []
-    for passages in combined_map.values():
-        all_passages.extend(passages)
+    full_corpus = hindi_corpus + english_corpus
+    evaluation_queries = select_evaluation_queries(full_corpus)
 
     strategies = [
         ("Passage-Native", chunk_passage_native),
         ("Fixed-Size Overlap", chunk_fixed_size),
         ("Sentence-Level", chunk_sentence_level),
     ]
-
-    results = {}
-
-    print(f"\nEvaluating 3 chunking strategies over {len(test_queries)} queries...")
-
+    results: Dict[str, Dict[str, Any]] = {}
     for name, chunk_fn in strategies:
-        # Build chunks for all passages using ONLY the current strategy
-        strategy_chunks: List[Dict[str, Any]] = []
-        for item in all_passages:
-            strategy_chunks.extend(
-                chunk_fn(item["passage_text"], item["metadata"])
-            )
+        print(f"Building full-corpus index for '{name}'...")
+        results[name] = evaluate_strategy(full_corpus, evaluation_queries, chunk_fn)
 
-        # Build HybridIndex for this strategy
-        print(f"Building index for '{name}' strategy ({len(strategy_chunks)} chunks)...")
-        index = build_hybrid_index(strategy_chunks)
-
-        hits_hi = 0
-        hits_en = 0
-
-        for q in test_queries:
-            retrieved = index.hybrid_retrieve(q, k=5)
-            is_hit = any(
-                c.get("meta", {}).get("is_selected") == 1
-                for c in retrieved
-            )
-            if is_hit:
-                if q in hi_map:
-                    hits_hi += 1
-                else:
-                    hits_en += 1
-
-        total_hits = hits_hi + hits_en
-        recall_at_5 = total_hits / len(test_queries) if test_queries else 0.0
-        results[name] = {
-            "chunk_count": len(strategy_chunks),
-            "hits_hi": hits_hi,
-            "hits_en": hits_en,
-            "total_hits": total_hits,
-            "total_queries": len(test_queries),
-            "recall_at_5": recall_at_5,
-        }
-
-    # Print Comparison Table
-    print("\n" + "=" * 78)
-    print("          CHUNKING STRATEGY ABLATION STUDY (RECALL@5)           ")
-    print(f"          Query Balance: {hi_count} Hindi / {en_count} English           ")
-    print("=" * 78)
-    print(f"{'Strategy':<22} | {'Chunks':<10} | {'Hits@5':<20} | {'Recall@5':<10}")
-    print("-" * 78)
+    print("\n" + "=" * 95)
+    print("       LEAKAGE-FREE CHUNKING ABLATION STUDY (RECALL@5)       ")
+    print("=" * 95)
+    print(
+        f"Corpus passages: {len(full_corpus)} | Evaluation queries: {len(evaluation_queries)}"
+    )
+    print("-" * 95)
+    print(f"{'Strategy':<22} | {'Chunks':<10} | {'Hits@5':<8} | {'Recall@5':<10} | {'MRR@5':<8}")
+    print("-" * 95)
     for name, stats in results.items():
-        hits_str = f"{stats['total_hits']}/{stats['total_queries']} (hi:{stats['hits_hi']} en:{stats['hits_en']})"
         print(
-            f"{name:<22} | {stats['chunk_count']:<10} | "
-            f"{hits_str:<20} | {stats['recall_at_5']:.4f}"
+            f"{name:<22} | {stats['chunk_count']:<10} | {stats['hits_at_5']:<8} | "
+            f"{stats['recall_at_5']:.4f}     | {stats['mrr_at_5']:.4f}"
         )
-    print("=" * 78)
+    print("=" * 95)
 
 
 if __name__ == "__main__":
