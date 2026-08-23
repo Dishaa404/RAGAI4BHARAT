@@ -9,6 +9,7 @@ Serves at: http://localhost:8000
 import json
 import os
 import sys
+import tempfile
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -270,6 +271,11 @@ HTML_CONTENT = """<!DOCTYPE html>
         .voice-btn:hover {
             transform: scale(1.05);
             box-shadow: 0 0 16px var(--primary-glow);
+        }
+
+        .voice-btn.recording {
+            background: linear-gradient(135deg, var(--danger), #b91c1c);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.45);
         }
 
         .sample-queries {
@@ -564,9 +570,9 @@ HTML_CONTENT = """<!DOCTYPE html>
 
                     <!-- Sample Queries -->
                     <div class="sample-queries">
-                        <button class="audio-demo-btn" onclick="simulateVoiceInput('भारत की राजधानी क्या है?')">
+                        <button class="audio-demo-btn" id="recordBtn" onclick="toggleRecording()" title="Record a voice query">
                             <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/></svg>
-                            Voice Demo (Hindi)
+                            Record Voice Query
                         </button>
                         <div class="query-chip" onclick="setQuery(this.innerText)">हिमालय की सबसे ऊंची चोटी कौन सी है?</div>
                         <div class="query-chip" onclick="setQuery(this.innerText)">What is the capital of India?</div>
@@ -653,14 +659,65 @@ HTML_CONTENT = """<!DOCTYPE html>
             executePipeline();
         }
 
-        function simulateVoiceInput(text) {
-            document.getElementById('queryInput').value = text;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+
+        async function toggleRecording() {
+            const button = document.getElementById('recordBtn');
             const wave = document.getElementById('voiceWave');
-            wave.classList.add('active');
-            setTimeout(() => {
-                wave.classList.remove('active');
-                executePipeline();
-            }, 800);
+
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                return;
+            }
+
+            if (!navigator.mediaDevices || !window.MediaRecorder) {
+                document.getElementById('fastAnswer').innerText = 'Voice recording is not supported by this browser.';
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
+                mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+                recordedChunks = [];
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) recordedChunks.push(event.data);
+                };
+                mediaRecorder.onstop = async () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    button.classList.remove('recording');
+                    button.innerText = 'Transcribing...';
+                    wave.classList.remove('active');
+                    const audio = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    await executeVoicePipeline(audio);
+                    button.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/></svg> Record Voice Query';
+                };
+                mediaRecorder.start();
+                button.classList.add('recording');
+                button.innerText = 'Stop Recording';
+                wave.classList.add('active');
+            } catch (error) {
+                document.getElementById('fastAnswer').innerText = 'Microphone access was denied or unavailable.';
+            }
+        }
+
+        async function executeVoicePipeline(audio) {
+            document.getElementById('fastAnswer').innerText = 'Transcribing and retrieving...';
+            document.getElementById('polishedAnswer').innerText = 'Processing async LLM polish...';
+            try {
+                const res = await fetch('/api/voice-query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': audio.type || 'audio/webm' },
+                    body: audio
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Voice query failed');
+                document.getElementById('queryInput').value = data.transcript || '';
+                renderPipelineResult(data);
+            } catch (error) {
+                document.getElementById('fastAnswer').innerText = error.message;
+            }
         }
 
         async function executePipeline() {
@@ -696,6 +753,25 @@ HTML_CONTENT = """<!DOCTYPE html>
                 document.getElementById('guardGroundedStatus').innerText = isGroundedRefusal ? "REFUSED" : "PASSED";
                 document.getElementById('guardGroundedStatus').style.color = isGroundedRefusal ? "var(--danger)" : "var(--accent)";
 
+                renderPipelineResult(data);
+            } catch (err) {
+                console.error("Pipeline API error:", err);
+                document.getElementById('fastAnswer').innerText = "Error executing pipeline.";
+            }
+        }
+
+        function renderPipelineResult(data) {
+                const isUnsafeRefusal = data.refused && (data.refusal_reason || "").toLowerCase().includes("restricted");
+                const isTopicRefusal = data.refused && (data.refusal_reason || "").toLowerCase().includes("threshold");
+                const isGroundedRefusal = data.refused && ((data.refusal_reason || "").toLowerCase().includes("grounded") || (data.refusal_reason || "").toLowerCase().includes("empty"));
+
+                document.getElementById('guardSafeStatus').innerText = isUnsafeRefusal ? "REFUSED" : "PASSED";
+                document.getElementById('guardSafeStatus').style.color = isUnsafeRefusal ? "var(--danger)" : "var(--accent)";
+                document.getElementById('guardTopicStatus').innerText = isTopicRefusal ? "REFUSED" : "PASSED";
+                document.getElementById('guardTopicStatus').style.color = isTopicRefusal ? "var(--danger)" : "var(--accent)";
+                document.getElementById('guardGroundedStatus').innerText = isGroundedRefusal ? "REFUSED" : "PASSED";
+                document.getElementById('guardGroundedStatus').style.color = isGroundedRefusal ? "var(--danger)" : "var(--accent)";
+
                 if (data.refused) {
                     document.getElementById('fastAnswer').innerHTML = `<span style="color: var(--warning); font-weight: 600;">Refused:</span> ${data.refusal_reason}`;
                     document.getElementById('polishedAnswer').innerText = "Refused due to guardrail validation (answer ungrounded or restricted query).";
@@ -711,11 +787,6 @@ HTML_CONTENT = """<!DOCTYPE html>
                 // Render Stage Waterfall & Context Chunks
                 renderWaterfall(data.timings_ms);
                 renderChunks(data.retrieved_chunks || []);
-
-            } catch (err) {
-                console.error("Pipeline API error:", err);
-                document.getElementById('fastAnswer').innerText = "Error executing pipeline.";
-            }
         }
 
         function renderWaterfall(timings) {
@@ -806,25 +877,36 @@ class VoiceRAGRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/query":
+        if parsed.path in ("/api/query", "/api/voice-query"):
             content_len = int(self.headers.get("Content-Length", 0))
-            post_body = self.rfile.read(content_len).decode("utf-8")
 
             try:
-                payload = json.loads(post_body)
-                query_text = payload.get("query", "").strip()
+                audio_path = None
+                if parsed.path == "/api/voice-query":
+                    content_type = self.headers.get("Content-Type", "audio/webm").split(";", 1)[0]
+                    suffix = ".wav" if content_type == "audio/wav" else ".webm"
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as audio_file:
+                        audio_file.write(self.rfile.read(content_len))
+                        audio_path = audio_file.name
+                    query_text = ""
+                else:
+                    post_body = self.rfile.read(content_len).decode("utf-8")
+                    payload = json.loads(post_body)
+                    query_text = payload.get("query", "").strip()
 
                 # Execute voice-rag pipeline with populated INDEX
                 result = run_pipeline(
-                    text_query=query_text,
+                    audio_path=audio_path,
+                    text_query=query_text or None,
                     index=INDEX,
                     async_polish=False,  # Immediate for Web JSON API
                 )
 
                 # Fetch top retrieved chunks for display
                 chunks = []
-                if INDEX and query_text:
-                    chunks = INDEX.hybrid_retrieve(query_text, k=3)
+                resolved_query = result.transcript or query_text
+                if INDEX and resolved_query:
+                    chunks = INDEX.hybrid_retrieve(resolved_query, k=3)
 
                 response_data = {
                     "transcript": result.transcript,
@@ -846,6 +928,9 @@ class VoiceRAGRequestHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(exc)}).encode("utf-8"))
+            finally:
+                if audio_path and os.path.exists(audio_path):
+                    os.unlink(audio_path)
         else:
             self.send_response(404)
             self.end_headers()

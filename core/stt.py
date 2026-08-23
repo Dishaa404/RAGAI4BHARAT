@@ -38,7 +38,7 @@ def _perform_sarvam_transcription(audio_path: str, api_key: str) -> str:
         client = Sarvam(api_key=api_key)
         response = client.speech_to_text.transcribe(
             file=audio_path,
-            model="saarika:v2",
+            model="saarika:v2.5",
         )
         if hasattr(response, "transcript"):
             return response.transcript
@@ -58,7 +58,7 @@ def _perform_sarvam_transcription(audio_path: str, api_key: str) -> str:
         filename = os.path.basename(audio_path)
         with open(audio_path, "rb") as f:
             files = {"file": (filename, f, "audio/wav")}
-            data = {"model": "saarika:v2"}
+            data = {"model": "saarika:v2.5"}
             res = requests.post(url, headers=headers, files=files, data=data, timeout=15)
 
         if res.status_code != 200:
