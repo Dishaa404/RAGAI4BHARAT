@@ -68,5 +68,10 @@ def extractive_answer(
             # Combined score incorporating lexical overlap and hybrid retrieval rank priority
             score = (0.5 * jaccard + 0.5 * coverage) * rank_priority
 
+            if score > highest_score:
+                highest_score = score
+                best_sentence = sentence
+                best_chunk = chunk
+
     confidence_score = round(min(max(highest_score, 0.0), 1.0), 4)
     return (best_sentence, best_chunk, confidence_score)

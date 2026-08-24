@@ -75,8 +75,11 @@ class HybridIndex:
             self.bm25_index = None
             return
 
-        import faiss
         import numpy as np
+        try:
+            import faiss
+        except ImportError:
+            faiss = None
         try:
             from rank_bm25 import BM25Okapi
         except ImportError as err:
@@ -89,6 +92,8 @@ class HybridIndex:
 
         # 1. Build Dense FAISS Index (best-effort; warns and falls back to BM25 on failure)
         try:
+            if faiss is None:
+                raise ImportError("faiss is not installed")
             passage_texts = [
                 f"passage: {c.get('text', '')}" if not c.get('text', '').startswith("passage: ") else c.get('text', '')
                 for c in chunks

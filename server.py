@@ -899,7 +899,7 @@ class VoiceRAGRequestHandler(BaseHTTPRequestHandler):
                     audio_path=audio_path,
                     text_query=query_text or None,
                     index=INDEX,
-                    async_polish=False,  # Immediate for Web JSON API
+                    async_polish=True,
                 )
 
                 # Fetch top retrieved chunks for display

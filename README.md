@@ -86,24 +86,44 @@ Run `python bench/ablation.py` over 30 test queries to evaluate retrieval perfor
 
 ## Installation & Usage
 
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
+The repository includes a small local fixture at `data/sample_msmarco.json`, so a first run does not require Hugging Face credentials. The fixture is intended for demos and tests; benchmark results should be generated against the full MSMARCO-XI dataset.
+
+### Windows PowerShell
+
+1. Create and activate a virtual environment:
+   ```powershell
+   py -m venv .venv
+   .\.venv\Scripts\Activate.ps1
    ```
 
-2. Configure environment variables (`.env`):
+2. Install dependencies:
    ```bash
-   cp .env.example .env
-   # Add SARVAM_API_KEY and GROQ_API_KEY to .env
+   python -m pip install --upgrade pip
+   python -m pip install -r requirements.txt
    ```
 
-3. Run Tests:
+3. Optionally configure API keys in a `.env` file in the project root:
+   ```text
+   SARVAM_API_KEY=your_sarvam_key
+   GROQ_API_KEY=your_groq_key
+   ```
+   Sarvam is required only for voice transcription. Groq is optional and provides asynchronous answer polishing; text queries and the extractive fast path work without either key.
+
+4. Start the local dashboard:
+   ```powershell
+   python server.py
+   ```
+   Open http://localhost:8000. The first startup downloads the embedding model if it is not cached and builds the local index.
+
+5. Run Tests:
    ```bash
-   python -m pytest tests/
+   python -m pytest tests/ -q
    ```
 
-4. Run Benchmarks:
+6. Run Benchmarks:
    ```bash
    python bench/latency.py
    python bench/ablation.py
    ```
+
+The latency benchmark warms the embedding model before timing and reports fast-path P50/P70/P90/P100. STT network time and optional Groq polishing are reported separately because they depend on external services. Record the generated values in the Latency Benchmark table before submitting.
