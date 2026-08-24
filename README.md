@@ -125,5 +125,3 @@ The repository includes a small local fixture at `data/sample_msmarco.json`, so 
    python bench/latency.py
    python bench/ablation.py
    ```
-
-The latency benchmark warms the embedding model before timing and reports fast-path P50/P70/P90/P100. STT network time and optional Groq polishing are reported separately because they depend on external services. Record the generated values in the Latency Benchmark table before submitting.
